@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.llm_cache/
+.env
+results/review.html
+results/decisions.jsonl

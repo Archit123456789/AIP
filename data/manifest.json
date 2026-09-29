@@ -1,0 +1,41 @@
+{
+  "config": {
+    "n_patients": 300,
+    "seed": 42,
+    "expose_patient_id": false,
+    "dup_rate": 0.06,
+    "dose_conflict_rate": 0.04,
+    "allergy_nkda_rate": 0.04,
+    "demographic_rate": 0.04,
+    "dx_exclusive_rate": 0.03,
+    "sex_dx_rate": 0.02,
+    "allergy_med_rate": 0.03,
+    "note_contradiction_rate": 0.06,
+    "temporal_rate": 0.07,
+    "missing_rate": 0.07,
+    "homonym_rate": 0.04,
+    "twin_rate": 0.015
+  },
+  "reference_date": "2025-06-30",
+  "n_patients": 300,
+  "n_records": 1033,
+  "injections": {
+    "duplicate": 58,
+    "dose_conflict": 12,
+    "allergy_nkda": 12,
+    "demographic": 12,
+    "dx_exclusive": 9,
+    "sex_dx": 20,
+    "allergy_med": 29,
+    "note_contradiction": 58,
+    "temporal": 68,
+    "missing": 68
+  },
+  "labels_by_type": {
+    "duplicate": 58,
+    "contradiction": 152,
+    "temporal": 68,
+    "missing": 68,
+    "terminology": 1070
+  }
+}
