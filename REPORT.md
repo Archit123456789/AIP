@@ -2,7 +2,7 @@
 
 **What is real and what is not.** No Gemini API key exists in the build environment, so the LLM-only and hybrid-with-Gemini columns are
 **not measured**. Everything in the "Measured" table is real output of `python -m aip.run --system rules` on `data/` (seed 42, 300 patients,
-1,007 records, 1,376 labelled issues). The "Oracle ceiling" table replaces Gemini with the answer key and is an upper bound on the pipeline
+1,033 records, 1,416 labelled issues). The "Oracle ceiling" table replaces Gemini with the answer key and is an upper bound on the pipeline
 design, **not** an LLM result. To fill the missing columns: set `GEMINI_API_KEY`, run `llm_only` and `hybrid`, then `python -m aip.evaluate`.
 
 ## Dataset (seed 42)
@@ -14,7 +14,7 @@ design, **not** an LLM result. To fill the missing columns: set `GEMINI_API_KEY`
 | missing | 68 | injected |
 | duplicate | 58 | injected |
 
-Terminology is ~78% of all labels, so micro-averages are mostly a terminology score; read macro-F1 and the per-type rows.
+Terminology is ~76% of all labels, so micro-averages are mostly a terminology score; read macro-F1 and the per-type rows.
 
 ## Measured: deterministic rule baseline
 | Metric | Rule-based | LLM-only | Hybrid (rules + Gemini) |
@@ -38,7 +38,7 @@ What the ceiling does *not* tell you is how often Gemini gets those judgments ri
 ## Discussion
 **Where rules win/lose (measured).** Rules are perfect on missing fields and temporal logic and never fired a false alarm. That is expected and should not be over-read: I wrote the rules and the generator together, and
 the checks are near-exact restatements of the injections. Precision 1.000 says the rules do not misfire on the decoys (titration, acquired allergy, homonyms, twins, benign negations), not that real EHR data would be this clean.
-Rules lose on recall where meaning is required: paraphrased note contradictions (all ~26 implicit ones missed), hard-tier terms ("sugar diabetes", "brain attack", "Basaglar") that also silently break downstream dose / exclusive-diagnosis / duplicate checks, and low-similarity duplicates.
+Rules lose on recall where meaning is required: note contradictions (32 of 58 missed: the paraphrased ones plus wordings the regexes do not cover), hard-tier terms ("sugar diabetes", "brain attack", "Basaglar") that also silently break downstream dose / exclusive-diagnosis / duplicate checks, and low-similarity duplicates.
 
 **What to expect from Gemini (hypotheses to test, not results).** LLM-only should be strong on free-text contradictions and synonym judgment but weaker on (a) exact arithmetic-like checks over many records, (b) cross-record checks when a patient's records fall in different chunks (chunking is a real handicap of this baseline), and (c) consistency / cost: ~1,000 records cost roughly one prompt-token pass over the whole dataset plus reasoning tokens, versus the hybrid's ~100 small calls. The hybrid's risk is the opposite: rules never see what the LLM alone would notice outside the gates (e.g. a contradiction in a note sentence with no negation cue).
 
