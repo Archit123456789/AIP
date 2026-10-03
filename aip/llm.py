@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -133,6 +134,7 @@ class LLMClient:
                 raise
             except Exception as e:                 # rate limits / transient network
                 last = e
+                print(f"  [llm] attempt {attempt + 1} failed: {str(e)[:200]}", file=sys.stderr, flush=True)
                 msg = str(e)
                 if any(k in msg for k in ("API key", "API_KEY", "PERMISSION_DENIED", "NOT_FOUND", "404", "INVALID_ARGUMENT", "400")):
                     break                           # permanent error (bad key / unknown model): do not retry
@@ -140,6 +142,7 @@ class LLMClient:
         else:
             raise RuntimeError(f"LLM call failed after retries: {last}")
         secs = time.perf_counter() - t0
+        print(f"  [llm] {self.model} call done in {secs:.1f}s ({it} in / {ot} out tokens)", file=sys.stderr, flush=True)
         if cp:
             cp.parent.mkdir(parents=True, exist_ok=True)
             cp.write_text(json.dumps(dict(text=text, **{"in": it, "out": ot, "secs": secs})))
@@ -159,7 +162,8 @@ class GeminiClient(LLMClient):
         except ImportError as e:
             raise LLMUnavailable("pip install google-genai") from e
         self._types = types
-        self._client = genai.Client(api_key=key)
+        timeout_ms = int(float(os.getenv("AIP_LLM_TIMEOUT_S", "120")) * 1000)
+        self._client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=timeout_ms))
 
     def _call(self, system, prompt):
         cfg = self._types.GenerateContentConfig(
