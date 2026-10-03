@@ -1,0 +1,107 @@
+{
+  "n_terms": 71,
+  "recall_at": {
+    "1": 0.5633802816901409,
+    "3": 0.676056338028169,
+    "5": 0.8028169014084507,
+    "10": 0.8873239436619719
+  },
+  "mrr": 0.6534372904091212,
+  "recall_at_5_by_kind": {
+    "med": 0.9,
+    "dx": 0.725,
+    "allergy": 0.9090909090909091
+  },
+  "menu_sizes": {
+    "dx": 28,
+    "med": 25,
+    "allergy": 10
+  },
+  "n_failures_at_5": 14,
+  "failures": [
+    [
+      "allergy",
+      "arachis",
+      "peanut",
+      "['penicillin', 'sulfa', 'aspirin_allergy']"
+    ],
+    [
+      "med",
+      "acetylsalicylic acid",
+      "aspirin",
+      "['metformin', 'amlodipine', 'insulin_glargine']"
+    ],
+    [
+      "dx",
+      "low blood count",
+      "anemia",
+      "['htn', 't2dm', 'copd']"
+    ],
+    [
+      "med",
+      "apap",
+      "acetaminophen",
+      "['metformin', 'insulin_glargine', 'lisinopril']"
+    ],
+    [
+      "dx",
+      "brain attack",
+      "stroke",
+      "['mi', 'afib', 'asthma']"
+    ],
+    [
+      "dx",
+      "low hemoglobin",
+      "anemia",
+      "['chf', 't2dm', 'mi']"
+    ],
+    [
+      "dx",
+      "crf",
+      "ckd",
+      "['t2dm', 't1dm', 'htn']"
+    ],
+    [
+      "dx",
+      "reactive airway disease",
+      "asthma",
+      "['copd', 'ckd', 'cad']"
+    ],
+    [
+      "dx",
+      "gord",
+      "gerd",
+      "['t2dm', 't1dm', 'htn']"
+    ],
+    [
+      "dx",
+      "cerebral infarction",
+      "stroke",
+      "['mi', 'htn', 'copd']"
+    ],
+    [
+      "dx",
+      "adiposity",
+      "obesity",
+      "['htn', 'asthma', 'mi']"
+    ],
+    [
+      "dx",
+      "leg clot",
+      "dvt",
+      "['t2dm', 't1dm', 'htn']"
+    ],
+    [
+      "dx",
+      "ihd",
+      "cad",
+      "['t2dm', 't1dm', 'htn']"
+    ],
+    [
+      "dx",
+      "chest infection",
+      "pneumonia",
+      "['uti', 'mi', 'copd']"
+    ]
+  ]
+}

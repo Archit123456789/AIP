@@ -45,6 +45,8 @@ def main(argv=None):
     ap.add_argument("--no-explain", action="store_true", help="hybrid: skip LLM explanations")
     ap.add_argument("--llm", choices=["gemini", "oracle"], default="gemini",
                     help="oracle = answer-key stand-in for the LLM (plumbing test / ceiling ONLY, not LLM results)")
+    ap.add_argument("--rag", action="store_true", help="hybrid: retrieval-augmented term mapping (top-k candidates instead of full menu)")
+    ap.add_argument("--rag-k", type=int, default=10)
     ap.add_argument("--workers", type=int, default=1, help="llm_only: parallel Gemini calls (try 4)")
     ap.add_argument("--chunk-size", type=int, default=25, help="llm_only: records per prompt")
     a = ap.parse_args(argv)
@@ -58,6 +60,8 @@ def main(argv=None):
         kw["llm"] = OracleClient(load_labels(Path(a.data) / "ground_truth.jsonl"), records)
     if a.system == "hybrid":
         kw["explain"] = not a.no_explain
+        kw["rag"] = a.rag
+        kw["rag_k"] = a.rag_k
     if a.system == "llm_only":
         kw["chunk_size"] = a.chunk_size
         kw["workers"] = a.workers

@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 
 from . import vocab as V
+from .kb import Retriever
 from .llm import LLMUnavailable, default_client
 from .prompts import CATEGORY_DEFS, SYSTEM, render_record
 from .rules import RuleEngine, _mention_items as _mentions
@@ -37,28 +38,47 @@ def _key(i: PredictedIssue):
 
 
 # ------------------------------------------------------------------ stage 2
-def llm_map_terms(llm, unresolved: dict) -> dict:
-    """unresolved: {(kind, text): record_ids} -> {(kind, text): cid | None}"""
+def llm_map_terms(llm, unresolved: dict, retriever=None, rag_k: int = 10) -> dict:
+    """unresolved: {(kind, text): record_ids} -> {(kind, text): cid | None}
+
+    Without a retriever the LLM is shown the whole vocabulary menu for the kind. With a retriever (RAG) it is shown only
+    the top-`rag_k` retrieved candidate concepts per term, and may only answer with one of those ids (or null).
+    """
     out = {}
     by_kind = {}
     for kind, text in unresolved:
         by_kind.setdefault(kind, []).append(text)
+    rules = ("Map only when the term denotes EXACTLY that concept (synonym, abbreviation, brand/generic name, colloquial name "
+             "or misspelling). A more specific subtype, a different condition, or anything you are not confident about -> null.")
     for kind, terms in by_kind.items():
         menu = "\n".join(f"{cid}: {name}" for cid, name in V.concept_menu(kind))
         valid = {cid for cid, _ in V.concept_menu(kind)}
         for i in range(0, len(terms), TERM_BATCH):
             batch = terms[i:i + TERM_BATCH]
-            prompt = (f"Map each {_KIND_LABEL[kind]} term to a concept id from the vocabulary below.\n"
-                      f"Map only when the term denotes EXACTLY that concept (synonym, abbreviation, brand/generic name, "
-                      f"colloquial name or misspelling). A more specific subtype, a different condition, or anything you are "
-                      f"not confident about -> null.\n\nVocabulary (id: canonical name):\n{menu}\n\nTerms:\n"
-                      + "\n".join(f"- {t}" for t in batch) +
-                      '\n\nReturn JSON: {"mappings": [{"term": <exact term>, "concept_id": <id or null>}]}')
-            obj = llm.generate_json(prompt, system=SYSTEM, tag="terminology")
+            allowed = {}
+            if retriever is None:
+                body = (f"Map each {_KIND_LABEL[kind]} term to a concept id from the vocabulary below.\n{rules}\n\n"
+                        f"Vocabulary (id: canonical name):\n{menu}\n\nTerms:\n" + "\n".join(f"- {t}" for t in batch))
+            else:
+                blocks = []
+                for t in batch:
+                    cands = retriever.term_candidates(t, kind, k=rag_k)
+                    allowed[t.strip().casefold()] = {d.meta["cid"] for d in cands}
+                    lines = "\n".join(f"    {d.meta['cid']}: {d.meta['canonical']} (also: {', '.join(d.meta['synonyms'])})"
+                                      for d in cands)
+                    blocks.append(f"TERM: {t}\n  candidates:\n{lines}")
+                body = (f"Map each {_KIND_LABEL[kind]} term to ONE of ITS OWN listed candidate ids, or null.\n{rules}\n\n"
+                        + "\n".join(blocks))
+            prompt = body + '\n\nReturn JSON: {"mappings": [{"term": <exact term>, "concept_id": <id or null>}]}'
+            obj = llm.generate_json(prompt, system=SYSTEM, tag="terminology_rag" if retriever else "terminology")
             for m in (obj or {}).get("mappings", []) if isinstance(obj, dict) else []:
                 t, cid = m.get("term"), m.get("concept_id")
-                if t is not None and (cid in valid or cid is None):
-                    out[(kind, t.strip().casefold())] = cid
+                if t is None:
+                    continue
+                key = t.strip().casefold()
+                ok = cid in (allowed.get(key, valid) if retriever else valid)
+                if ok or cid is None:
+                    out[(kind, key)] = cid
     return out
 
 
@@ -135,10 +155,10 @@ def llm_explain(llm, issues: list) -> None:
 
 
 # ------------------------------------------------------------------ driver
-def run_hybrid(records: list, use_patient_id: bool = False, explain: bool = True, llm=None):
+def run_hybrid(records: list, use_patient_id: bool = False, explain: bool = True, llm=None, rag: bool = False, rag_k: int = 10):
     llm = llm or default_client()
     by_id = {r.record_id: r for r in records}
-    meta = dict(model=llm.model, skipped_stages=[], stage_counts={})
+    meta = dict(model=llm.model, skipped_stages=[], stage_counts={}, rag=rag, rag_k=rag_k if rag else None)
 
     def stage(name, fn, default=None):
         try:
@@ -155,7 +175,7 @@ def run_hybrid(records: list, use_patient_id: bool = False, explain: bool = True
     meta["stage_counts"]["ambiguous_duplicate_pairs"] = len(res1.ambiguous_duplicates)
     meta["stage_counts"]["note_candidates"] = len(res1.note_candidates)
 
-    term_map = stage("terminology", lambda: llm_map_terms(llm, res1.unresolved_terms), {}) or {}
+    term_map = stage("terminology", lambda: llm_map_terms(llm, res1.unresolved_terms, retriever=(Retriever() if rag else None), rag_k=rag_k), {}) or {}
     term_map = {k: v for k, v in term_map.items() if v}
     meta["stage_counts"]["llm_term_mappings"] = len(term_map)
 

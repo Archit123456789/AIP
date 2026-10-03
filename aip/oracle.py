@@ -27,6 +27,14 @@ class OracleClient(ScriptedClient):
     def _answer(self, system: str, prompt: str):
         if prompt.startswith("Map each"):
             kind = V.DX if "diagnosis term" in prompt else V.MED if "medication term" in prompt else V.ALLERGY
+            if "TERM: " in prompt:      # RAG prompt: answer correctly only if the true concept is among the retrieved candidates
+                out = []
+                for blk in prompt.split("TERM: ")[1:]:
+                    term = blk.split("\n", 1)[0]
+                    cands = set(re.findall(r"^\s{4}([\w]+): ", blk, flags=re.M))
+                    cid = V.resolve(kind, term)
+                    out.append({"term": term, "concept_id": cid if cid in cands else None})
+                return {"mappings": out}
             terms = prompt.split("Terms:\n", 1)[1].split("\n\nReturn JSON")[0].splitlines()
             return {"mappings": [{"term": t[2:], "concept_id": V.resolve(kind, t[2:])} for t in terms]}
         if prompt.startswith("For each PAIR"):

@@ -53,3 +53,19 @@ LLM responses are cached on disk (`.llm_cache/`, keyed by model+prompt) so re-ru
 Rules first; the LLM only sees the residual: (1) surface strings the dictionary + typo-tolerant matcher could not map -> concept ids (then rules re-run, so terminology, dose, allergy and duplicate checks all benefit);
 (2) duplicate pairs whose content similarity is in the grey zone; (3) notes with a negation/cessation cue about a medication/diagnosis/allergy that no explicit rule explained (~60% of notes pass this gate; recall of the gate on labelled note contradictions is 100%);
 (4) plain-language explanations for non-terminology issues. LLM free-text findings must quote the note verbatim - ungrounded quotes are dropped. Provenance is in `detector` (`rule:*`, `rule+llm_terms:*`, `llm:*`).
+
+
+## Extension: RAG, a guarded review agent, and red-teaming (Lab 6 pattern)
+```bash
+python -m aip.rag_eval                          # retrieval metrics for the terminology RAG (recall@k, MRR)
+python -m aip.run --system hybrid --rag         # hybrid with retrieval-augmented term mapping (live Gemini)
+python -m aip.redteam                           # 21-case red-team (17 attacks + 4 controls), worst-case simulated model
+python -m aip.redteam --model gemini            # same suite against live Gemini (costs money; needs a working key)
+```
+| file | role |
+|---|---|
+| `aip/kb.py` | knowledge base (10 fictional SOP documents + one entry per vocabulary concept) and a dependency-free BM25 + char-n-gram retriever |
+| `aip/agent.py` | the review agent: tool loop with three budgets, Pydantic tool contracts, scope enforcement, human confirmation on the one privileged tool, injection detector, structured output with citation grounding, output filter, verdict cross-check |
+| `aip/redteam.py` | attack harness and the layered evaluation; success criteria are written in the module docstring |
+| `data/attacks/attack_suite.jsonl` | 9 direct attacks, 8 indirect attacks (poisoned notes and a poisoned KB document), 4 benign controls |
+| `reports/lab6_redteam.{json,md}` | layered results; `results/rag_retrieval.json`, `results/rag_ceiling.md` | retrieval results |
