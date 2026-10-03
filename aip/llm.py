@@ -114,13 +114,15 @@ class LLMClient:
         self.stats.add(tag, it, ot, it / 1e6 * pin + ot / 1e6 * pout, secs, cached)
         obj = parse_json(text)
         if obj is None:
-            # unparseable (e.g. output truncated at the token limit): retry once, bypassing/overwriting the cached bad answer
             with self.stats._lock:
                 self.stats.parse_failures += 1
-            print(f"  [llm] unparseable response ({tag}); retrying once", file=sys.stderr, flush=True)
-            text, it, ot, secs, cached = self._cached_call(system, prompt, refresh=True)
-            self.stats.add(tag, it, ot, it / 1e6 * pin + ot / 1e6 * pout, secs, cached)
-            obj = parse_json(text)
+            if not cached:
+                # fresh but unparseable (e.g. truncated at the output-token limit): retry once, overwriting the cached bad
+                # answer. A *cached* unparseable answer was already retried in an earlier run, so it is not retried again.
+                print(f"  [llm] unparseable response ({tag}); retrying once", file=sys.stderr, flush=True)
+                text, it, ot, secs, cached = self._cached_call(system, prompt, refresh=True)
+                self.stats.add(tag, it, ot, it / 1e6 * pin + ot / 1e6 * pout, secs, cached)
+                obj = parse_json(text)
         return obj
 
     # -- cache -------------------------------------------------------------
