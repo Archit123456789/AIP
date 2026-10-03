@@ -2,7 +2,7 @@
 
 Env:
   GEMINI_API_KEY (or GOOGLE_API_KEY)   required for live calls
-  AIP_GEMINI_MODEL                     default "gemini-2.5-pro"
+  AIP_GEMINI_MODEL                     default "gemini-3.1-pro-preview"
   AIP_PRICE_IN_PER_M / AIP_PRICE_OUT_PER_M   USD per 1M tokens (override the table below; check current pricing)
   AIP_LLM_CACHE                        cache dir (default .llm_cache); set to "" to disable
 
@@ -20,8 +20,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-DEFAULT_MODEL = "gemini-2.5-pro"
+DEFAULT_MODEL = "gemini-3.1-pro-preview"
 # USD per 1M tokens (input, output) -- list-price assumption for <=200k-token prompts; verify before quoting costs.
+# NOTE: no verified price for gemini-3.1-pro-preview is hard-coded; unknown models fall back to the 2.5-pro list price
+# below as a PLACEHOLDER. Set AIP_PRICE_IN_PER_M / AIP_PRICE_OUT_PER_M from Google's pricing page for real cost numbers.
 PRICE_TABLE = {
     "gemini-2.5-pro": (1.25, 10.00),
     "gemini-2.5-flash": (0.30, 2.50),
@@ -96,7 +98,7 @@ class LLMClient:
         env_in, env_out = os.getenv("AIP_PRICE_IN_PER_M"), os.getenv("AIP_PRICE_OUT_PER_M")
         if env_in and env_out:
             return float(env_in), float(env_out)
-        return PRICE_TABLE.get(self.model, PRICE_TABLE[DEFAULT_MODEL])
+        return PRICE_TABLE.get(self.model, PRICE_TABLE["gemini-2.5-pro"])
 
     def generate_json(self, prompt: str, system: str = "", tag: str = "misc"):
         """Returns parsed JSON (or None on unparseable output)."""

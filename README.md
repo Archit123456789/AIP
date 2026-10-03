@@ -14,7 +14,7 @@ Five issue categories: `duplicate`, `contradiction`, `missing`, `temporal`, `ter
 pip install -r requirements.txt
 python -m aip.generator --n-patients 300 --seed 42 --out data     # Step 1: records.jsonl + ground_truth.jsonl (+ patient_links.jsonl, manifest.json)
 python -m aip.run --system rules                                  # Step 2: rule baseline      -> results/rules.jsonl
-export GEMINI_API_KEY=...                                         # never commit this; optional AIP_GEMINI_MODEL (default gemini-2.5-pro)
+export GEMINI_API_KEY=...                                         # never commit this; optional AIP_GEMINI_MODEL (default gemini-3.1-pro-preview)
 python -m aip.run --system llm_only                               # Step 3: LLM-only baseline
 python -m aip.run --system hybrid                                 # Step 4: hybrid (degrades to rules if no key; skipped stages are logged in meta)
 python -m aip.evaluate --systems rules,llm_only,hybrid            # Step 5: metrics table -> results/metrics.{md,json}
