@@ -75,3 +75,21 @@ def test_affirming_quote_without_negation_cue_is_rejected():
                          if p.startswith("For each record below") else {})
     issues, meta = run_hybrid([r], llm=llm, explain=False)
     assert meta["stage_counts"]["llm_free_text_findings"] == 0
+
+
+def test_unparseable_llm_answer_is_retried_once():
+    from aip.llm import LLMClient
+
+    class Flaky(LLMClient):
+        model = "flaky"
+        def __init__(self):
+            super().__init__(); self.n = 0
+        def _cache_path(self, system, prompt):
+            return None
+        def _call(self, system, prompt):
+            self.n += 1
+            return ('{"issues": [' if self.n == 1 else '{"issues": []}'), 10, 5   # first answer is truncated JSON
+
+    c = Flaky()
+    assert c.generate_json("p") == {"issues": []}
+    assert c.n == 2 and c.stats.parse_failures == 1

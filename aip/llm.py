@@ -114,8 +114,13 @@ class LLMClient:
         self.stats.add(tag, it, ot, it / 1e6 * pin + ot / 1e6 * pout, secs, cached)
         obj = parse_json(text)
         if obj is None:
+            # unparseable (e.g. output truncated at the token limit): retry once, bypassing/overwriting the cached bad answer
             with self.stats._lock:
                 self.stats.parse_failures += 1
+            print(f"  [llm] unparseable response ({tag}); retrying once", file=sys.stderr, flush=True)
+            text, it, ot, secs, cached = self._cached_call(system, prompt, refresh=True)
+            self.stats.add(tag, it, ot, it / 1e6 * pin + ot / 1e6 * pout, secs, cached)
+            obj = parse_json(text)
         return obj
 
     # -- cache -------------------------------------------------------------
@@ -126,9 +131,9 @@ class LLMClient:
         h = hashlib.sha256(json.dumps([self.model, system, prompt]).encode()).hexdigest()
         return Path(d) / f"{h}.json"
 
-    def _cached_call(self, system, prompt):
+    def _cached_call(self, system, prompt, refresh=False):
         cp = self._cache_path(system, prompt)
-        if cp and cp.exists():
+        if cp and cp.exists() and not refresh:
             e = json.loads(cp.read_text())
             return e["text"], e["in"], e["out"], e["secs"], True
         t0 = time.perf_counter()
