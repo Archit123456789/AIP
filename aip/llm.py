@@ -131,6 +131,9 @@ class LLMClient:
                 raise
             except Exception as e:                 # rate limits / transient network
                 last = e
+                msg = str(e)
+                if any(k in msg for k in ("API key", "API_KEY", "PERMISSION_DENIED", "NOT_FOUND", "404", "INVALID_ARGUMENT", "400")):
+                    break                           # permanent error (bad key / unknown model): do not retry
                 time.sleep(2 ** (attempt + 1))
         else:
             raise RuntimeError(f"LLM call failed after retries: {last}")

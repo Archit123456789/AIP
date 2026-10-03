@@ -68,6 +68,10 @@ def main(argv=None):
     (out / f"{a.system}.meta.json").write_text(json.dumps(meta, indent=2))
     print(f"{a.system}: {len(issues)} issues, {meta['wall_seconds']:.1f}s, "
           f"llm_calls={meta.get('llm_calls', 0)}, cost=${meta.get('cost_usd', 0):.4f}")
+    for msg in meta.get("skipped_stages", []):
+        print(f"  [WARNING] LLM stage skipped -> {msg}")
+    if meta.get("skipped_stages"):
+        print("  The output above is NOT a real hybrid run (skipped stages fell back to rules).")
 
 
 if __name__ == "__main__":
