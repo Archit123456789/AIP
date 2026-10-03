@@ -45,6 +45,7 @@ def main(argv=None):
     ap.add_argument("--no-explain", action="store_true", help="hybrid: skip LLM explanations")
     ap.add_argument("--llm", choices=["gemini", "oracle"], default="gemini",
                     help="oracle = answer-key stand-in for the LLM (plumbing test / ceiling ONLY, not LLM results)")
+    ap.add_argument("--workers", type=int, default=1, help="llm_only: parallel Gemini calls (try 4)")
     ap.add_argument("--chunk-size", type=int, default=25, help="llm_only: records per prompt")
     a = ap.parse_args(argv)
     records = load_records(Path(a.data) / "records.jsonl")
@@ -59,6 +60,7 @@ def main(argv=None):
         kw["explain"] = not a.no_explain
     if a.system == "llm_only":
         kw["chunk_size"] = a.chunk_size
+        kw["workers"] = a.workers
     try:
         issues, meta = run_system(a.system, records, use_patient_id=a.use_patient_id, **kw)
     except LLMUnavailable as e:

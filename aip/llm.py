@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,8 +46,13 @@ class LLMStats:
     llm_seconds: float = 0.0          # sum of per-call latencies (original latencies for cache hits)
     parse_failures: int = 0
     by_tag: dict = field(default_factory=dict)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def add(self, tag, it, ot, cost, secs, cached):
+        with self._lock:
+            self._add(tag, it, ot, cost, secs, cached)
+
+    def _add(self, tag, it, ot, cost, secs, cached):
         self.calls += 1
         self.cache_hits += int(cached)
         self.input_tokens += it
@@ -108,7 +114,8 @@ class LLMClient:
         self.stats.add(tag, it, ot, it / 1e6 * pin + ot / 1e6 * pout, secs, cached)
         obj = parse_json(text)
         if obj is None:
-            self.stats.parse_failures += 1
+            with self.stats._lock:
+                self.stats.parse_failures += 1
         return obj
 
     # -- cache -------------------------------------------------------------
@@ -162,7 +169,7 @@ class GeminiClient(LLMClient):
         except ImportError as e:
             raise LLMUnavailable("pip install google-genai") from e
         self._types = types
-        timeout_ms = int(float(os.getenv("AIP_LLM_TIMEOUT_S", "120")) * 1000)
+        timeout_ms = int(float(os.getenv("AIP_LLM_TIMEOUT_S", "600")) * 1000)
         self._client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=timeout_ms))
 
     def _call(self, system, prompt):

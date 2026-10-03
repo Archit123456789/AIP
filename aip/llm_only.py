@@ -20,17 +20,23 @@ def _sort_key(r):
     return (l, f, r.date_of_birth or "", r.encounter_date or "")
 
 
-def run_llm_only(records: list, chunk_size: int = 25, llm=None):
+def run_llm_only(records: list, chunk_size: int = 25, llm=None, workers: int = 1):
     llm = llm or default_client()
     ordered = sorted(records, key=_sort_key)
     known = {r.record_id for r in records}
     issues, dropped = [], 0
-    for i in range(0, len(ordered), chunk_size):
-        chunk = ordered[i:i + chunk_size]
-        prompt = (f"{CATEGORY_DEFS}\nBelow are {len(chunk)} records, sorted by patient name. Records may belong to the same "
-                  f"patient across different source systems (names/local refs differ per source). Find every data-quality issue.\n\n"
-                  f"{render_records(chunk)}\n\n{OUTPUT_SPEC}")
-        obj = llm.generate_json(prompt, system=SYSTEM, tag="llm_only")
+    chunks = [ordered[i:i + chunk_size] for i in range(0, len(ordered), chunk_size)]
+    prompts = [(f"{CATEGORY_DEFS}\nBelow are {len(c)} records, sorted by patient name. Records may belong to the same "
+                f"patient across different source systems (names/local refs differ per source). Find every data-quality issue.\n\n"
+                f"{render_records(c)}\n\n{OUTPUT_SPEC}") for c in chunks]
+    call = lambda p: llm.generate_json(p, system=SYSTEM, tag="llm_only")
+    if workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            objs = list(ex.map(call, prompts))          # order-preserving; calls are independent
+    else:
+        objs = [call(p) for p in prompts]
+    for chunk, obj in zip(chunks, objs):
         ids_in_chunk = {r.record_id for r in chunk}
         for it in (obj or {}).get("issues", []) if isinstance(obj, dict) else []:
             rids = [x for x in it.get("record_ids", []) if x in known]
@@ -43,5 +49,5 @@ def run_llm_only(records: list, chunk_size: int = 25, llm=None):
                 detector="llm_only", confidence=0.5, explanation=str(it.get("description", "")),
                 evidence=[dict(record_id=x, field=str(it.get("field_path", "")), value="(see description)") for x in rids[:3]]))
     meta = llm.stats.as_meta()
-    meta.update(model=llm.model, chunk_size=chunk_size, malformed_issues_dropped=dropped)
+    meta.update(model=llm.model, chunk_size=chunk_size, workers=workers, malformed_issues_dropped=dropped)
     return issues, meta
