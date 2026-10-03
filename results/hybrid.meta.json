@@ -1,4 +1,43 @@
 {
+  "model": "gemini-3.1-pro-preview",
+  "skipped_stages": [],
+  "stage_counts": {
+    "rules_pass1_issues": 1174,
+    "unresolved_terms": 71,
+    "ambiguous_duplicate_pairs": 4,
+    "note_candidates": 609,
+    "llm_term_mappings": 52,
+    "llm_confirmed_duplicates": 0,
+    "llm_free_text_findings": 32,
+    "llm_ungrounded_findings_dropped": 1
+  },
+  "llm_calls": 98,
+  "llm_cache_hits": 3,
+  "input_tokens": 182393,
+  "output_tokens": 337321,
+  "cost_usd": 4.412638,
+  "llm_seconds": 2379.262,
+  "llm_parse_failures": 0,
+  "llm_by_stage": {
+    "terminology": {
+      "calls": 3,
+      "input_tokens": 1277,
+      "output_tokens": 8880,
+      "cost_usd": 0.109114
+    },
+    "free_text": {
+      "calls": 77,
+      "input_tokens": 149953,
+      "output_tokens": 263423,
+      "cost_usd": 3.4609819999999987
+    },
+    "explain": {
+      "calls": 18,
+      "input_tokens": 31163,
+      "output_tokens": 65018,
+      "cost_usd": 0.842542
+    }
+  },
   "clusters": {
     "R000001": "C0001",
     "R000002": "C0002",
@@ -1034,10 +1073,7 @@
     "R001032": "C0057",
     "R001033": "C0011"
   },
-  "llm_calls": 0,
-  "input_tokens": 0,
-  "output_tokens": 0,
-  "cost_usd": 0.0,
-  "wall_seconds": 0.1530532919568941,
-  "system": "rules"
+  "llm_available": true,
+  "wall_seconds": 2323.8588841250166,
+  "system": "hybrid"
 }

@@ -1,0 +1,23 @@
+{
+  "llm_calls": 42,
+  "llm_cache_hits": 7,
+  "input_tokens": 246090,
+  "output_tokens": 839014,
+  "cost_usd": 10.560348,
+  "llm_seconds": 5454.992,
+  "llm_parse_failures": 1,
+  "llm_by_stage": {
+    "llm_only": {
+      "calls": 42,
+      "input_tokens": 246090,
+      "output_tokens": 839014,
+      "cost_usd": 10.560348
+    }
+  },
+  "model": "gemini-3.1-pro-preview",
+  "chunk_size": 25,
+  "workers": 4,
+  "malformed_issues_dropped": 0,
+  "wall_seconds": 1163.59613941703,
+  "system": "llm_only"
+}
