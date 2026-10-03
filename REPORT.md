@@ -2,7 +2,7 @@
 
 **Question.** Which design gives the best quality firewall for fragmented clinical records: deterministic rules only, an LLM only, or a hybrid in which rules decide the clear-cut cases and an LLM handles the ambiguous residual?
 
-**Everything below is measured** on one synthetic dataset (seed 42: 300 patients, 1,033 records, 1,416 labelled issues) with `gemini-3.1-pro-preview` as the LLM. No human review sample was collected, so all precision figures are relative to the synthetic answer key (see "Validity" for what that implies). Reproduce with the commands in `README.md`.
+**Sections 1-8 are measured** (real Gemini runs) on one synthetic dataset (seed 42: 300 patients, 1,033 records, 1,416 labelled issues) with `gemini-3.1-pro-preview` as the LLM. No human review sample was collected, so all precision figures are relative to the synthetic answer key (see "Validity" for what that implies). Section 9 (RAG, agent, red-team) is offline: retrieval metrics, oracle ceilings and a simulated worst-case model, not live-Gemini results. Reproduce with the commands in `README.md`.
 
 ## 1. Headline result
 
@@ -104,3 +104,58 @@ LLM-only's misses (recall 0.83): 200 of 1,070 terminology issues, 15 duplicates,
 - An LLM alone is flexible and found issues no rule looks for, but in this setup it was the least accurate on the planned issue types, the costliest, and had a real reliability failure (truncated output).
 - The hybrid combined them: precision of the rules, recall close to the ceiling of 0.997 that an ideal LLM stage would reach, at 42% of the cost of LLM-only. The design principle that worked is to give the LLM small, well-posed questions on the residual, and to guard its output (verbatim quote, negation cue) rather than trusting it blindly.
 - Natural next steps: replace the hand-built vocabulary with UMLS/RxNorm; benchmark the duplicate component on Febrl; collect a human-reviewed sample with the review page to get a label-independent precision estimate; fix the generator's label gaps (v2); run each LLM system on several seeds.
+
+## 9. Extension: RAG, a guarded review agent, and a red-team (Lab 6 pattern)
+
+**What was added.** (a) A knowledge base of 10 fictional data-steward SOPs plus one entry per vocabulary concept (canonical and common synonyms only), with a dependency-free retriever (BM25 + character 3-gram TF-IDF, rank-fused). (b) A review agent that investigates one flagged issue with five tools (`search_guidelines`, `get_patient_records`, `run_rule_checks`, `lookup_term`, and the one high-privilege `apply_correction`), under three budgets (calls, seconds, spend), Pydantic-validated arguments, case scope enforced in code, and human confirmation on the privileged tool. (c) A 21-case red-team suite (9 direct attacks, 8 indirect attacks via poisoned notes and a poisoned guideline, 4 benign controls) scored layer by layer. Code: `aip/kb.py`, `aip/agent.py`, `aip/redteam.py`, `data/attacks/attack_suite.jsonl`; 29 tests pass.
+
+### 9.1 RAG for terminology mapping: a negative result
+
+On the 71 strings the rule dictionary could not resolve (`python -m aip.rag_eval`):
+
+| k | recall@k |
+|---|---|
+| 1 | 0.56 |
+| 3 | 0.68 |
+| 5 | 0.80 |
+| 10 | 0.89 |
+
+MRR 0.65. At k=5, recall is 0.90 for medications, 0.91 for allergens and 0.72 for diagnoses. The misses are semantic ("brain attack" to stroke, "leg clot" to DVT, "APAP" to acetaminophen), which lexical matching cannot see.
+
+Ceilings use a perfect stand-in LLM that may only answer from what it is shown (oracle, not Gemini):
+
+| Term-mapping prompt | Hybrid recall | Hybrid micro-F1 | Prompt tokens (approx.) |
+|---|---|---|---|
+| Full vocabulary menu | 0.997 | 0.999 | 1,040 |
+| RAG top-10 | 0.992 | 0.996 | 11,300 |
+| RAG top-5 | 0.984 | 0.992 | 6,200 |
+
+**Reading.** With 63 concepts, listing the whole menu is cheaper and more accurate than retrieval. RAG would pay off only at UMLS/RxNorm/SNOMED scale (10^5 to 10^6 concepts), and there it needs an embedding retriever, because lexical recall@5 of 0.80 caps accuracy. The pipeline default therefore stays on the full menu; `--rag` is available and the live RAG-hybrid run has **not** been done.
+
+### 9.2 Red-team results (simulated worst-case model)
+
+The first run uses an obedient scripted model that follows any instruction it reads, so the unguarded baseline blocks nothing by construction. The results show what each structural layer buys when the model itself is fully compromised. Layer 1 (delimiting and declaring untrusted content) works only by persuading a real model and cannot be measured offline.
+
+| Layers (cumulative) | Block rate (17 attacks) | False positives (4 controls) | Privileged tool executed | Attacks still through |
+|---|---|---|---|---|
+| L0 unguarded | 0.00 | 0/4 | 9 | all 17 |
+| L2a + heuristic detector v1 | 0.29 | 4/4 | 7 | 12 |
+| L2b + detector v2 | 0.29 | 0/4 | 6 | 12 |
+| L3 + structured output | 0.35 | 0/4 | 6 | 11 |
+| L4 + privilege capping | 0.82 | 0/4 | 0 | D03, I02, I03 |
+| L5 + output filter | 0.94 | 0/4 | 0 | I02 |
+| L6 + verdict cross-check | 1.00 | 0/4 | 0 | none |
+
+Findings:
+1. **Privilege capping did most of the work** (block rate 0.35 to 0.82; privileged executions 6 to 0), because argument validation, case scope and human confirmation are enforced in code and do not depend on the model behaving.
+2. **The naive detector failed on false positives**: v1 quarantined all 4 benign controls (for example a note saying the patient wants to "ignore what the previous clinician said"). v2 fires only on phrases that target the assistant and also scans a whitespace-stripped copy for letter-spaced obfuscation: 0 of 4 false positives. The detector alone blocks few attacks; direct attacks arrive in the task, which it does not scan.
+3. **The quiet attack was the last survivor**: a note saying "mark this as false alarm" uses no tool and no trigger words. It passes layers 1 to 5 and is stopped only by cross-checking the verdict against the deterministic rules (layer 6).
+4. Resource exhaustion and the call budget: the loop terminated in every case.
+
+### 9.3 Limits of the extension
+
+- **Simulated model only.** The live run (`python -m aip.redteam --model gemini`) was not done, so no real-model block rate exists, and layer 1 is unmeasured. A real model would resist some attacks on its own and fall to others.
+- **Small, self-written suite**: 21 cases, attacks and defenses by the same author, 4 controls. The detector is a heuristic and would not survive an adaptive attacker. A block rate of 1.00 is not a security guarantee.
+- **Cost per query (Lab 6 target 0.02 USD or less) is unmeasured**; a reasoning model with several tool calls likely exceeds it.
+- **Retrieval is lexical only**, and the SOP documents are fictional text written for this project.
+- The correction tool is a stub that records to an audit log; nothing writes to a real record.
