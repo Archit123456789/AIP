@@ -88,6 +88,7 @@ def llm_judge_duplicates(llm, pairs: list, by_id: dict) -> dict:
 def llm_free_text(llm, record_ids: list, by_id: dict):
     """returns ([(rid, quote, item, reason)], n_ungrounded_dropped)"""
     found, dropped = [], 0
+    cue = RuleEngine.CUE
     for i in range(0, len(record_ids), NOTE_BATCH):
         batch = [by_id[r] for r in record_ids[i:i + NOTE_BATCH]]
         prompt = ("For each record below, decide whether its free-text `note` contradicts that SAME record's structured fields "
@@ -95,7 +96,9 @@ def llm_free_text(llm, record_ids: list, by_id: dict):
                   "patient has no drug allergies while an allergy is listed; says a listed active medication was stopped or is not "
                   "taken; or says the patient never had a diagnosis that is listed. Do NOT report: statements consistent with the "
                   "structured data, statements about NEW allergies/medications, a course that is completed and has an end date, "
-                  "adherence remarks, or unrelated symptoms.\n\n"
+                  "adherence remarks, or unrelated symptoms. The quoted sentence MUST itself deny, negate or report stopping something that is "
+                  "listed (it contains words like no / not / never / denies / stopped / discontinued / without); a sentence that merely "
+                  "repeats or affirms a listed item (e.g. 'Assessment: asthma') is NOT a contradiction, even if other fields look odd.\n\n"
                   + "\n\n".join(render_record(r) for r in batch) +
                   '\n\nReturn JSON: {"findings": [{"record_id": <id>, "quote": <exact substring of the note>, '
                   '"structured_item": <which field/item it contradicts>, "reason": <short>}]}')
@@ -105,6 +108,9 @@ def llm_free_text(llm, record_ids: list, by_id: dict):
             quote = str(f.get("quote", ""))
             if r is None or not quote or _norm(quote) not in _norm(r.notes or ""):
                 dropped += 1          # ungrounded: quote is not in the note -> reject (guards against hallucinated evidence)
+                continue
+            if not cue.search(quote):
+                dropped += 1          # a contradiction must be a denial/negation/cessation statement; affirmations are not
                 continue
             found.append((r.record_id, quote, str(f.get("structured_item", "")), str(f.get("reason", ""))))
     return found, dropped

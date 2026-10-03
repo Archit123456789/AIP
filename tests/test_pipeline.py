@@ -66,3 +66,12 @@ def test_matching_semantics():
     t2 = IssueLabel("I2", "missing", ["a"], "P1", "d", "medications[x].dose")
     assert matches(PredictedIssue("p", "missing", ["a"], None, "d", "medications"), t2)
     assert not matches(PredictedIssue("p", "missing", ["a"], None, "d", "sex"), t2)
+
+
+def test_affirming_quote_without_negation_cue_is_rejected():
+    r = next(x for x in RECORDS if x.notes)
+    sentence = r.notes.split(". ")[0]      # an affirmative/neutral sentence of the note, e.g. "Follow-up visit"
+    llm = ScriptedClient(lambda s, p: {"findings": [{"record_id": r.record_id, "quote": "Hx of", "structured_item": "dx", "reason": "x"}]}
+                         if p.startswith("For each record below") else {})
+    issues, meta = run_hybrid([r], llm=llm, explain=False)
+    assert meta["stage_counts"]["llm_free_text_findings"] == 0
