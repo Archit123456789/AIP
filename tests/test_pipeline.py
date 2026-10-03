@@ -93,3 +93,19 @@ def test_unparseable_llm_answer_is_retried_once():
     c = Flaky()
     assert c.generate_json("p") == {"issues": []}
     assert c.n == 2 and c.stats.parse_failures == 1
+
+
+def test_llm_only_splits_a_chunk_whose_answer_is_unparseable():
+    from aip.llm import LLMClient
+
+    class BigChunkFails(LLMClient):
+        model = "bigfail"
+        def _cache_path(self, system, prompt):
+            return None
+        def _call(self, system, prompt):
+            n = prompt.count("\n[R")  # number of records in this prompt
+            return ('{"issues": [' if n > 6 else '{"issues": []}'), 10, 5   # >6 records -> truncated JSON
+
+    issues, meta = run_llm_only(RECORDS[:20], llm=BigChunkFails(), chunk_size=20)
+    assert meta["split_events"] >= 1 and all(n > 4 for n in meta["split_chunk_sizes"])
+    assert meta["llm_parse_failures"] >= 1
