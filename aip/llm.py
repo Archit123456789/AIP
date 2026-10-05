@@ -178,7 +178,12 @@ class GeminiClient(LLMClient):
             raise LLMUnavailable("pip install google-genai") from e
         self._types = types
         timeout_ms = int(float(os.getenv("AIP_LLM_TIMEOUT_S", "600")) * 1000)
-        self._client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=timeout_ms))
+        # Keys that start with "AQ." are Google Cloud (Vertex AI express-mode) keys; they are rejected by the AI Studio
+        # endpoint (HTTP 400) and need vertexai=True. AI Studio keys start with "AIza". Override with AIP_GEMINI_BACKEND.
+        backend = os.getenv("AIP_GEMINI_BACKEND", "vertex" if key.startswith("AQ.") else "studio").lower()
+        kw = dict(vertexai=True) if backend == "vertex" else {}
+        self.backend = backend
+        self._client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=timeout_ms), **kw)
 
     def _call(self, system, prompt):
         cfg = self._types.GenerateContentConfig(
