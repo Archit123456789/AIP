@@ -139,10 +139,11 @@ class LLMClient:
             e = json.loads(cp.read_text())
             return e["text"], e["in"], e["out"], e["secs"], True
         t0 = time.perf_counter()
-        last = None
+        last, done = None, False
         for attempt in range(4):
             try:
                 text, it, ot = self._call(system, prompt)
+                done = True
                 break
             except LLMUnavailable:
                 raise
@@ -153,8 +154,8 @@ class LLMClient:
                 if any(k in msg for k in ("API key", "API_KEY", "PERMISSION_DENIED", "NOT_FOUND", "404", "INVALID_ARGUMENT", "400")):
                     break                           # permanent error (bad key / unknown model): do not retry
                 time.sleep(2 ** (attempt + 1))
-        else:
-            raise RuntimeError(f"LLM call failed after retries: {last}")
+        if not done:
+            raise RuntimeError(f"LLM call failed: {last}")
         secs = time.perf_counter() - t0
         print(f"  [llm] {self.model} call done in {secs:.1f}s ({it} in / {ot} out tokens)", file=sys.stderr, flush=True)
         if cp:
@@ -167,7 +168,7 @@ class GeminiClient(LLMClient):
     def __init__(self, model: Optional[str] = None, api_key: Optional[str] = None):
         super().__init__()
         self.model = model or os.getenv("AIP_GEMINI_MODEL", DEFAULT_MODEL)
-        key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        key = (api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
         if not key:
             raise LLMUnavailable("GEMINI_API_KEY not set")
         try:
